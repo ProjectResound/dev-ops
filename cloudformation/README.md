@@ -43,7 +43,7 @@ Search for the following terms in the template. You'll see that the associated v
 
 ![Create Stack in CloudFormation](assets/cloud-formation-create-stack.png)
 
-1. Download [the template](resound-template.json)
+1. Download [resound-template.json](resound-template.json)
 1. In the AWS console, go to Services > CloudFormation
 1. Click on `Create Stack`
 1. Upload the template by clicking on Choose a template > Choose File > point to the file, then click `Next`
