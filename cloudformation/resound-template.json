@@ -1,0 +1,812 @@
+{"AWSTemplateFormatVersion": "2010-09-09",
+  "Parameters": {
+    "KeyName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "Name of an existing EC2 KeyPair to enable SSH access to the ECS instances."
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "Select a VPC that allows instances to access the Internet."
+    },
+    "SubnetId": {
+      "Type": "List<AWS::EC2::Subnet::Id>",
+      "Description": "Select two subnets in your selected VPC."
+    },
+    "DesiredCapacity": {
+      "Type": "Number",
+      "Default": "1",
+      "Description": "Number of instances to launch in your ECS cluster."
+    },
+    "MaxSize": {
+      "Type": "Number",
+      "Default": "1",
+      "Description": "Maximum number of instances that can be launched in your ECS cluster."
+    },
+    "InstanceType": {
+      "Description": "EC2 instance type",
+      "Type": "String",
+      "Default": "t2.micro",
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium",
+        "t2.large",
+        "m3.medium",
+        "m3.large",
+        "m3.xlarge",
+        "m3.2xlarge",
+        "m4.large",
+        "m4.xlarge",
+        "m4.2xlarge",
+        "m4.4xlarge",
+        "m4.10xlarge",
+        "c4.large",
+        "c4.xlarge",
+        "c4.2xlarge",
+        "c4.4xlarge",
+        "c4.8xlarge",
+        "c3.large",
+        "c3.xlarge",
+        "c3.2xlarge",
+        "c3.4xlarge",
+        "c3.8xlarge",
+        "r3.large",
+        "r3.xlarge",
+        "r3.2xlarge",
+        "r3.4xlarge",
+        "r3.8xlarge",
+        "i2.xlarge",
+        "i2.2xlarge",
+        "i2.4xlarge",
+        "i2.8xlarge"
+      ],
+      "ConstraintDescription": "Please choose a valid instance type."
+    }
+  },
+  "Mappings": {
+    "AWSRegionToAMI": {
+      "us-east-1": {
+        "AMIID": "ami-eca289fb"
+      },
+      "us-east-2": {
+        "AMIID": "ami-446f3521"
+      },
+      "us-west-1": {
+        "AMIID": "ami-9fadf8ff"
+      },
+      "us-west-2": {
+        "AMIID": "ami-7abc111a"
+      },
+      "eu-west-1": {
+        "AMIID": "ami-a1491ad2"
+      },
+      "eu-central-1": {
+        "AMIID": "ami-54f5303b"
+      },
+      "ap-northeast-1": {
+        "AMIID": "ami-9cd57ffd"
+      },
+      "ap-southeast-1": {
+        "AMIID": "ami-a900a3ca"
+      },
+      "ap-southeast-2": {
+        "AMIID": "ami-5781be34"
+      }
+    }
+  },
+  "Resources": {
+    "resoundECSCluster": {
+      "Type": "AWS::ECS::Cluster"
+    },
+    "EcsSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "ECS Security Group",
+        "VpcId": {
+          "Ref": "VpcId"
+        }
+      }
+    },
+    "EcsSecurityGroupHTTPinbound": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EcsSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "80",
+        "ToPort": "80",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "EcsSecurityGroupSSHinbound": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EcsSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "22",
+        "ToPort": "22",
+        "CidrIp": "0.0.0.0/0"
+      }
+    },
+    "EcsSecurityGroupALBports": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Ref": "EcsSecurityGroup"
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "31000",
+        "ToPort": "61000",
+        "SourceSecurityGroupId": {
+          "Ref": "EcsSecurityGroup"
+        }
+      }
+    },
+    "CloudwatchLogsGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Join": [
+            "-",
+            [
+              "ECSLogGroup",
+              {
+                "Ref": "AWS::StackName"
+              }
+            ]
+          ]
+        },
+        "RetentionInDays": 14
+      }
+    },
+    "resoundAPIredisTD": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "NetworkMode": "bridge",
+        "TaskRoleArn": "",
+        "ContainerDefinitions": [
+          {
+            "VolumesFrom": [
+
+            ],
+            "Memory": 1000,
+            "PortMappings": [
+              {
+                "HostPort": 0,
+                "ContainerPort": 3000,
+                "Protocol": "tcp"
+              }
+            ],
+            "Hostname": "api",
+            "Essential": true,
+            "EntryPoint": [
+              "foreman",
+              "start"
+            ],
+            "MountPoints": [
+
+            ],
+            "Name": "resound_api",
+            "Environment": [
+              {
+                "Name": "AWS_REGION",
+                "Value": ""
+              },
+              {
+                "Name": "RAILS_ENV",
+                "Value": "production"
+              },
+              {
+                "Name": "ALLOWED_CORS_URL",
+                "Value": ""
+              },
+              {
+                "Name": "RESOUND_URL",
+                "Value": ""
+              },
+              {
+                "Name": "DB_USER",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_CALLBACK_URL",
+                "Value": ""
+              },
+              {
+                "Name": "AWS_SECRET_ACCESS_KEY",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_DOMAIN",
+                "Value": ""
+              },
+              {
+                "Name": "AWS_BUCKET",
+                "Value": ""
+              },
+              {
+                "Name": "DB_NAME",
+                "Value": ""
+              },
+              {
+                "Name": "DB_HOST",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_CLIENT_ID",
+                "Value": ""
+              },
+              {
+                "Name": "AWS_ACCESS_KEY_ID",
+                "Value": ""
+              },
+              {
+                "Name": "DB_PW",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_AUDIENCE",
+                "Value": ""
+              },
+              {
+                "Name": "SECRET_KEY_BASE",
+                "Value": ""
+              },
+              {
+                "Name": "REDIS_URL",
+                "Value": "redis://redis:6379"
+              }
+            ],
+            "Links": [
+              "resound_redis:redis"
+            ],
+            "Image": "scprdev/resound-api:latest",
+            "Command": [
+
+            ],
+            "Cpu": 0,
+            "MemoryReservation": 500
+          },
+          {
+            "VolumesFrom": [
+
+            ],
+            "Memory": 500,
+            "PortMappings": [
+
+            ],
+            "Essential": true,
+            "MountPoints": [
+
+            ],
+            "Name": "resound_redis",
+            "Environment": [
+
+            ],
+            "Image": "redis:3.0.7",
+            "Cpu": 0,
+            "MemoryReservation": 128
+          }
+        ],
+        "Volumes": [
+
+        ],
+        "Family": "resound-api-redis",
+        "PlacementConstraints": [
+
+        ]
+      }
+    },
+    "resoundwebTD": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "NetworkMode": "bridge",
+        "TaskRoleArn": "",
+        "ContainerDefinitions": [
+          {
+            "VolumesFrom": [
+
+            ],
+            "Memory": 300,
+            "PortMappings": [
+              {
+                "HostPort": 0,
+                "ContainerPort": 80,
+                "Protocol": "tcp"
+              }
+            ],
+            "Hostname": "web",
+            "Essential": true,
+            "EntryPoint": [
+
+            ],
+            "MountPoints": [
+
+            ],
+            "Name": "resound_web",
+            "Environment": [
+              {
+                "Name": "AUTH0_DOMAIN",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_CLIENT_ID",
+                "Value": ""
+              },
+              {
+                "Name": "RESOUND_API_URL",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_AUDIENCE",
+                "Value": ""
+              },
+              {
+                "Name": "AUTH0_CALLBACK_URL",
+                "Value": ""
+              }
+            ],
+            "Links": [
+
+            ],
+            "Image": "scprdev/resound-store-manage:latest",
+            "Command": [
+
+            ],
+            "Cpu": 0
+          }
+        ],
+        "Volumes": [
+
+        ],
+        "Family": "resound-web",
+        "PlacementConstraints": [
+
+        ]
+      }
+    },
+    "resoundALB": {
+      "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+      "Properties": {
+        "Name": "resound-ALB",
+        "Scheme": "internet-facing",
+        "LoadBalancerAttributes": [
+          {
+            "Key": "idle_timeout.timeout_seconds",
+            "Value": "60"
+          }
+        ],
+        "Subnets": {
+          "Ref": "SubnetId"
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "EcsSecurityGroup"
+          }
+        ]
+      }
+    },
+    "ALBListener": {
+      "Type": "AWS::ElasticLoadBalancingV2::Listener",
+      "DependsOn": "ECSServiceRole",
+      "Properties": {
+        "DefaultActions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "resoundwebECSTG"
+            }
+          }
+        ],
+        "LoadBalancerArn": {
+          "Ref": "resoundALB"
+        },
+        "Port": "80",
+        "Protocol": "HTTP"
+      }
+    },
+    "resoundALBListenerRule1": {
+      "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+      "DependsOn": "ALBListener",
+      "Properties": {
+        "Actions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "resoundapiECSTG"
+            }
+          }
+        ],
+        "Conditions": [
+          {
+            "Field": "path-pattern",
+            "Values": [
+              "/cable"
+            ]
+          }
+        ],
+        "ListenerArn": {
+          "Ref": "ALBListener"
+        },
+        "Priority": 1
+      }
+    },
+    "resoundALBListenerRule2": {
+      "Type": "AWS::ElasticLoadBalancingV2::ListenerRule",
+      "DependsOn": "ALBListener",
+      "Properties": {
+        "Actions": [
+          {
+            "Type": "forward",
+            "TargetGroupArn": {
+              "Ref": "resoundapiECSTG"
+            }
+          }
+        ],
+        "Conditions": [
+          {
+            "Field": "path-pattern",
+            "Values": [
+              "/api/*"
+            ]
+          }
+        ],
+        "ListenerArn": {
+          "Ref": "ALBListener"
+        },
+        "Priority": 2
+      }
+    },
+    "resoundapiECSTG": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn": "resoundALB",
+      "Properties": {
+        "HealthCheckIntervalSeconds": 300,
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 5,
+        "Name": "resound-api-tg",
+        "Port": 3000,
+        "Protocol": "HTTP",
+        "UnhealthyThresholdCount": 2,
+        "VpcId": {
+          "Ref": "VpcId"
+        }
+      }
+    },
+    "resoundwebECSTG": {
+      "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+      "DependsOn": "resoundALB",
+      "Properties": {
+        "HealthCheckIntervalSeconds": 300,
+        "HealthCheckPath": "/",
+        "HealthCheckProtocol": "HTTP",
+        "HealthCheckTimeoutSeconds": 5,
+        "HealthyThresholdCount": 5,
+        "Name": "resound-web-tg",
+        "Port": 80,
+        "Protocol": "HTTP",
+        "UnhealthyThresholdCount": 2,
+        "VpcId": {
+          "Ref": "VpcId"
+        }
+      }
+    },
+    "ECSAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "VPCZoneIdentifier": {
+          "Ref": "SubnetId"
+        },
+        "LaunchConfigurationName": {
+          "Ref": "ContainerInstances"
+        },
+        "MinSize": "1",
+        "MaxSize": {
+          "Ref": "MaxSize"
+        },
+        "DesiredCapacity": {
+          "Ref": "DesiredCapacity"
+        }
+      },
+      "UpdatePolicy": {
+        "AutoScalingReplacingUpdate": {
+          "WillReplace": "true"
+        }
+      }
+    },
+    "ContainerInstances": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": {
+          "Fn::FindInMap": [
+            "AWSRegionToAMI",
+            {
+              "Ref": "AWS::Region"
+            },
+            "AMIID"
+          ]
+        },
+        "SecurityGroups": [
+          {
+            "Ref": "EcsSecurityGroup"
+          }
+        ],
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "IamInstanceProfile": {
+          "Ref": "EC2InstanceProfile"
+        },
+        "KeyName": {
+          "Ref": "KeyName"
+        },
+        "AssociatePublicIpAddress": true,
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash -xe\n",
+                "echo ECS_CLUSTER=",
+                {
+                  "Ref": "resoundECSCluster"
+                },
+                " >> /etc/ecs/ecs.config\n",
+                "yum install -y aws-cfn-bootstrap\n",
+                "/opt/aws/bin/cfn-signal -e $? ",
+                "         --stack ",
+                {
+                  "Ref": "AWS::StackName"
+                },
+                "         --resource ECSAutoScalingGroup ",
+                "         --region ",
+                {
+                  "Ref": "AWS::Region"
+                },
+                "\n"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "resoundAPIservice": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": "ALBListener",
+      "Properties": {
+        "Cluster": {
+          "Ref": "resoundECSCluster"
+        },
+        "DesiredCount": "1",
+        "LoadBalancers": [
+          {
+            "ContainerName": "resound_api",
+            "ContainerPort": "3000",
+            "TargetGroupArn": {
+              "Ref": "resoundapiECSTG"
+            }
+          }
+        ],
+        "Role": {
+          "Ref": "ECSServiceRole"
+        },
+        "TaskDefinition": {
+          "Ref": "resoundAPIredisTD"
+        }
+      }
+    },
+    "resoundWEBservice": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": "ALBListener",
+      "Properties": {
+        "Cluster": {
+          "Ref": "resoundECSCluster"
+        },
+        "DesiredCount": "1",
+        "LoadBalancers": [
+          {
+            "ContainerName": "resound_web",
+            "ContainerPort": "80",
+            "TargetGroupArn": {
+              "Ref": "resoundwebECSTG"
+            }
+          }
+        ],
+        "Role": {
+          "Ref": "ECSServiceRole"
+        },
+        "TaskDefinition": {
+          "Ref": "resoundwebTD"
+        }
+      }
+    },
+    "ECSServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ecs.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "ecs-service",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+                    "elasticloadbalancing:DeregisterTargets",
+                    "elasticloadbalancing:Describe*",
+                    "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+                    "elasticloadbalancing:RegisterTargets",
+                    "ec2:Describe*",
+                    "ec2:AuthorizeSecurityGroupIngress"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EC2Role": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "ecs-service",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecs:CreateCluster",
+                    "ecs:DeregisterContainerInstance",
+                    "ecs:DiscoverPollEndpoint",
+                    "ecs:Poll",
+                    "ecs:RegisterContainerInstance",
+                    "ecs:StartTelemetrySession",
+                    "ecs:Submit*",
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "AutoscalingRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "application-autoscaling.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "service-autoscaling",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "application-autoscaling:*",
+                    "cloudwatch:DescribeAlarms",
+                    "cloudwatch:PutMetricAlarm",
+                    "ecs:DescribeServices",
+                    "ecs:UpdateService"
+                  ],
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "EC2InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "EC2Role"
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "resoundAPIservice": {
+      "Value": {
+        "Ref": "resoundAPIservice"
+      }
+    },
+    "resoundWEBservice": {
+      "Value": {
+        "Ref": "resoundWEBservice"
+      }
+    },
+    "ecscluster": {
+      "Value": {
+        "Ref": "resoundECSCluster"
+      }
+    },
+    "resoundALB": {
+      "Description": "Your ALB DNS URL",
+      "Value": {
+        "Fn::Join": [
+          "",
+          [
+            {
+              "Fn::GetAtt": [
+                "resoundALB",
+                "DNSName"
+              ]
+            }
+          ]
+        ]
+      }
+    },
+    "resoundAPITaskDef": {
+      "Value": {
+        "Ref": "resoundAPIredisTD"
+      }
+    },
+    "resoundWEBTaskDef": {
+      "Value": {
+        "Ref": "resoundwebTD"
+      }
+    }
+  }
+}
